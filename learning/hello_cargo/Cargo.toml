@@ -1,0 +1,8 @@
+[package]
+name = "hello_cargo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blocksr = "1.0.0"
+clap = "4.5.53"
