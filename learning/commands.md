@@ -10,6 +10,9 @@
 - help: `cargo <specificed-cmd> --help`
 - add libL `cargo add <needed-lib>`
 - add lib for dev env: `cargo add <libs> --dev`
+- only doc-test: `cargo test --doc`
+- run doc test in parallel
+    + `cargo test -- --test-threads=<num-of-thread(type:number)>`
 
 # setup code-space:
 
