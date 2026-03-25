@@ -5,6 +5,8 @@
 //! let config = Logging::default();
 //! ```
 //! 
+//! 
+#[derive(Debug, PartialEq)]
 pub enum LogLevel {
     Debug,
     Info,
@@ -12,6 +14,7 @@ pub enum LogLevel {
     Error,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum LogOutput {
     Stdout,
     Stderr,
@@ -37,7 +40,12 @@ pub struct Logging {
     pub destination: LogOutput,   
 }
 
+use std::io::{self, Write};
+use std::fs;
+
 impl Logging {
+
+
     pub fn new(enabled: bool, level: LogLevel, output: LogOutput) -> Self {
         Self {
             enabled: enabled,
@@ -77,9 +85,58 @@ impl Logging {
         }
     }
 
+    fn format_log(&self, log: &str) -> String
+    {
+        format!("{} Level: {}", self.level(), log).to_string()
+    }
+
+    pub fn write(&self, msg: &str) -> io::Result<()>
+    {
+        if !self.enabled
+        {
+            return Err(io::Error::new(io::ErrorKind::Other, "logging disabled"));
+        }
+
+        match self.destination
+        {
+            LogOutput::Stdout => Logging::write_stdout(&self.format_log(msg)),
+            LogOutput::Stderr => Logging::write_stderr(&self.format_log(msg)),
+            LogOutput::File(ref file_name) => Logging::write_log_to_file(msg, &file_name.to_string())
+        }
+    }
+
+
+    pub fn write_stdout(message: &str) -> io::Result<()>
+    {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+
+        handle.write_all(message.as_bytes());
+
+        Ok(())
+    }
+
+
+    pub fn write_stderr(message: &str) -> io::Result<()>
+    {
+        let stdout = io::stderr();
+        let mut handle = stdout.lock();
+
+        handle.write_all(message.as_bytes());
+
+        Ok(())
+    }
+
+    pub fn write_log_to_file(msg: &str, file_name: &str) -> io::Result<()>
+    {
+        fs::write(file_name, msg.as_bytes());
+        Ok(())
+    }
+
     pub const DEFAULT_LEVEL: LogLevel = LogLevel::Info;
     pub const DEFAULT_ENABLED: bool = true;
     pub const DEFAULT_DESTINATION: LogOutput = LogOutput::Stdout;
+
     
 }
 

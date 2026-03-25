@@ -95,3 +95,13 @@ mod internal_tests {
        assert_eq!(output, expected_output);
    }
 }
+
+#[cfg(not(test))]
+mod external_tests {
+
+    fn run_greet()
+    {
+        // add show a greet 
+        
+    }
+}

@@ -20,8 +20,6 @@ pub struct User {
 }
 
 
-
-
 fn example() {
     let mut log = Logging::new(false, LogLevel::Info, LogOutput::Stdout);
 
@@ -49,3 +47,39 @@ pub mod parser {
         assert!(re.is_match(test_str));
     }
 }
+
+pub fn ie_reverse_twice(s: String) -> String {
+    s.chars().rev().collect::<String>().chars().rev().collect()
+}
+
+pub fn ie_add(a: i32, b: i32) -> i32 {
+    a+b as i32
+}
+
+
+
+use proptest::prelude::*;
+
+proptest! {
+
+    #[test]
+    fn reverse_twice_returns_original(input in ".*"){
+        let result = ie_reverse_twice(input.clone());
+
+        prop_assert_eq!(result, input);
+    }
+
+    #[test]
+    fn addition_is_commutative(a in -1000i32..1000i32, b in -1000i32..1000i32) {
+        prop_assert_eq!(ie_add(a , b), ie_add(b, a));
+    }
+}
+
+// example with fuzz
+pub fn parse_input(data: &[u8]) {
+    let s = std::str::from_utf8(data).unwrap(); // dangerous
+    println!("{}", s);
+}
+
+
+// bash: cargo fuzz run fuzz_target_1
