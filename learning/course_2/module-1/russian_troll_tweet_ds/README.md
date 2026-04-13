@@ -1,4 +1,4 @@
-# Chanllenges
+# Challenges
 
 >1. Research Neo4j's graph algorithm and data-science tools for connected data analysis. Summarize the most relevant for analyzing social networks.
 >2. Find tweets or other social network dataset and develop questions you could analyze with Neo4j.
@@ -83,10 +83,10 @@ These convert graph structue -> vectors for ML
 - **Node2Vec**
 - **GraphSAGE**
 
-`Why importants for social networks`
+`Why importants for social networks?`
 - Feed into:
     - Recommendation systems 
-    - Frauddetections models 
+    - Fraud-detections models 
     - User classification
 
 ### 7. Path Finding (information flow)
@@ -105,3 +105,49 @@ These convert graph structue -> vectors for ML
 
 ### 8. References:
 - [graph-data-science-introduction](https://neo4j.com/docs/graph-data-science/current/introduction/)
+
+
+## Find tweets or other social network dataset 
+
+### 1. Russian Troll Tweets Dataset
+### 2. SNAP Twitter Dataset
+### 3. Reddit Comment Dataset
+### 4. Higgs Twitter Dataset
+### 5. FakeNewsNet
+
+
+## Loading the tweet troll dataset into `Neo4j`
+
+- refer: [graphdb-standford-slides](https://web.stanford.edu/class/ee380/Abstracts/180221-slides.pdf)
+
+```text
+WITH $tweetArr AS tweets
+UNWIND tweets AS tweet
+
+MERGE (u:User {user_id: tweet.user_id})
+ON CREATE SET u.screen_name = tweet.screen_name
+
+MERGE (t: Tweet {tweet_id: tweet.tweet_id})
+ON CREATE SET t.text = tweet.tweet_text,
+              t.permalink = tweet.permalink
+
+MERGE (u)-[:POSTED]->(t)
+
+FOREACH (ht IN tweet.hashtags |
+    MERGE (h:Hashtag {tag: ht.tag})
+    ON CREATE SET h.srchived_url = ht.archived_url
+    MERGE (t)-[:HAS_TAG]->(h)
+)
+
+FOREACH (link IN tweet.links | 
+  MERGE (l: Link {url: link.url})
+  ON CREATE SET l.archived_url = link.archived_url
+  MERGE (t)-[:HAS_TAG]->(h)
+)
+
+FOREACH (link IN tweet.links | 
+  MERGE (l:Link {url: link.url})
+  ON CRETE SET l.archived_url = link.archived_url
+  MERGE (t)-[:HAS_LINK]->(l)
+)
+```

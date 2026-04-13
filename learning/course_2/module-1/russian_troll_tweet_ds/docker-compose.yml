@@ -1,0 +1,24 @@
+
+
+services:
+  neo4j:
+    image: neo4j:5.18
+    container_name: graphdb
+
+    restart: unless-stopped
+
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    
+    environment:
+      - NEO4J_AUTH=neo4j/${PASWWORD}
+      - NEO4J_dbms_memory_heap_initial__size=${HEAP_INITIAL_SIZE}
+      - NEO4J_dbms_memory_heap_max__size=${HEAP_MAX_SIZE}
+      - NEO4J_dbms_memory_pagecache_size=${PAGE_CACHE_SIZE}
+      - NEO4JLABS_PLUGINS=["apoc", "graph-data-science"]
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+      - ./import:/var/lib/neo4j/import
+      - ./plugins:/plugins
