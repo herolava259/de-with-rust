@@ -151,3 +151,14 @@ FOREACH (link IN tweet.links |
   MERGE (t)-[:HAS_LINK]->(l)
 )
 ```
+
+```text
+
+```
+
+## References
+
+- [dataset](https://github.com/fivethirtyeight/russian-troll-tweets/)
+  - or: [kaggle-ds](https://www.kaggle.com/datasets/fivethirtyeight/russian-troll-tweets/data)
+
+- [how-to-scraping-data-from-twitter-api](https://www.lyonwj.com/blog/scraping-russian-twitter-trolls-python-neo4j)

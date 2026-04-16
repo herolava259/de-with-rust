@@ -28,16 +28,26 @@
 ### a. What is betweeness-centrality? 
 - Betweeness centrality is a way of detecting the amount of influence a node has over the flow of information in a graph. It is often used to find nodes that serve as a bridge from one part of a graph to another.
 - The algorithm calculates shortest paths between all pairs of nodes in a graph. Each node receives a score, based on the number of shortest patsh that pass through the node. Nodes that more frequently lie on shortest paths between other nodes will have higher betweeness centrality scores.
+
+
+
 $$
 c_B(v) = \sum_{s,t \in V} \frac{\sigma(s, t | v)}{\sigma(s, t)}
 $$
 
 >- where $V$ is the set of nodes, $\sigma(s, t)$ is the number of shortest $(s, t)$-paths, and $\sigma(s, t|v)$ is the number of those paths passing through some node $v$ other than $s$ and $t$. if $s=t,\,\sigma(s,t)=1$, and if $v \in {s, t},\, \sigma(s,t|v)=0$. The denominator $\sigma(s,t)$ is a normalization factor that can be turned off to get the raw path counts.
 
+- measure the probability that a node appears in the shortest paths between any other nodes
+
+$$
+C_B = \sum_{i \neq j \neq v} \frac{\sigma_{ij}(v)}{\sigma_{ij}} / \frac{(n-1)(n-2)}{2}
+$$
 
 ### b. How?
 - Step 1: Use `pet-graph lib in rust` to calculate shortest path of all pairs of node in the graph. Specially one use `dijkstra or bellman_forn` algorithm to calculate them. 
 - Step 2: Use the formula above to calculate betweeness centrality each node in the graph
+
+### c. betweeness centrality in huge graph
 
 ### c. References
 
