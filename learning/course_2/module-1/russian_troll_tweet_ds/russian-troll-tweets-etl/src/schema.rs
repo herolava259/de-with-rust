@@ -10,10 +10,24 @@ pub struct TweetAggregateRoot
     tweet_text: String,
     user_id: String,
     timestamp: DateTime<Utc>,
-    hashtags: Vec<String>,
-    links: Vec<String>,
+    hashtags: Vec<(String, String)>,
+    links: Vec<(String, String)>,
     permalink: String
 }
+
+pub struct TweetBuilder
+{
+    tweet_id: Option<String>,
+    screen_name: Option<String>,
+    tweet_text: Option<String>,
+    user_id: Option<String>,
+    time_stamp: Option<String>,
+    permalink: Option<String>,
+    hashtags_table: HashMap<String, String>,
+    links_table: HashMap<String, String>
+}
+
+
 
 pub struct TweetRecord
 {
@@ -30,7 +44,7 @@ pub struct TweetHashTagRelationship
     hashtag: String
 }
 
-pub struct HashtagAggregateRoot
+pub struct HashtagRecord
 {
     tag: String,
     archieved_url: String
@@ -49,7 +63,7 @@ pub struct UserRecord
     screen_name: String
 }
 
-impl Hash for HashtagAggregateRoot{
+impl Hash for HashtagRecord{
 
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.tag.hash(state);
@@ -62,10 +76,11 @@ impl Hash for UserRecord {
     }
 }
 
+
 impl TweetAggregateRoot
 {
     pub fn new(tweet_id: String, screen_name: String, content: String, user_id: String,
-            timestamp: String, hashtags: Vec<String>, links: Vec<String>, permalink: String) -> Self
+            timestamp: String, hashtags: Vec<(String, String)>, links: Vec<(String, String)>, permalink: String) -> Self
     {
         Self
         {
@@ -80,7 +95,7 @@ impl TweetAggregateRoot
         }
     }
 
-    pub fn normalize_schema(self) -> (TweetRecord, Vec<TweetHashTagRelationship>, Vec<LinkRecord>, UserRecord )
+    pub fn normalize_schema(self) -> (TweetRecord, Vec<TweetHashTagRelationship>, Vec<LinkRecord>, Vec<>, UserRecord )
     {
         let tweet = TweetRecord {
             tweet_id: self.tweet_id,
@@ -90,17 +105,24 @@ impl TweetAggregateRoot
             timestamp: self.timestamp
         };
 
-        let hashtag_rels = self.hashtags.into_iter().map(|ht| {
+        let hashtag_rels = self.hashtags.into_iter().map(|(tag, _)| {
             TweetHashTagRelationship{
                 tweet_id: self.tweet_id,
-                hashtag: ht
+                hashtag: tag
             }
         }).collect();
 
-        let links = self.links.into_iter().map(|l| {
+        let hashtags = self.hashtags.into_iter().map(|tag, url| {
+            HashtagRecord{
+                tag: tag,
+                archieved_url: url
+            }
+        });
+
+        let links = self.links.into_iter().map(|url, archived_url| {
             LinkRecord {
-                url: l,
-                archived_url: self.permalink,
+                url: url,
+                archived_url: archived_url,
                 tweet_id: self.tweet_id
             }
         }).collect();
@@ -110,7 +132,23 @@ impl TweetAggregateRoot
             screen_name: self.screen_name
         };
 
-        (tweet, hashtag_rels, links, user)
+        (tweet, hashtag_rels, hashtags, links, users)
+    }
+}
+
+impl TweetBuilder {
+
+    fn new() -> Self {
+        Self {
+            tweet_id: None,
+            screen_name: None,
+            tweet_text: None,
+            user_id: None,
+            time_stamp: None,
+            permalink: None,
+            hashtags_table: HashMap<String, String>,
+            links_table: HashMap<String, String>
+        }
     }
 }
 
