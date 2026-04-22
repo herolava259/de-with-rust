@@ -44,12 +44,12 @@ C_B = \sum_{i \neq j \neq v} \frac{\sigma_{ij}(v)}{\sigma_{ij}} / \frac{(n-1)(n-
 $$
 
 ### b. How?
-- Step 1: Use `pet-graph lib in rust` to calculate shortest path of all pairs of node in the graph. Specially one use `dijkstra or bellman_forn` algorithm to calculate them. 
+- Step 1: Use `pet-graph lib in rust` to calculate shortest path of all pairs of node in the graph. Specially one use `dijkstra or bellman_ford` algorithm to calculate them. 
 - Step 2: Use the formula above to calculate betweeness centrality each node in the graph
 
 ### c. betweeness centrality in huge graph
 
-### c. References
+### d. References
 
 - wiki: [from-network-x](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.betweenness_centrality.html)
 

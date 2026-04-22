@@ -135,7 +135,7 @@ MERGE (u)-[:POSTED]->(t)
 
 FOREACH (ht IN tweet.hashtags |
     MERGE (h:Hashtag {tag: ht.tag})
-    ON CREATE SET h.srchived_url = ht.archived_url
+    ON CREATE SET h.archived_url = ht.archived_url
     MERGE (t)-[:HAS_TAG]->(h)
 )
 

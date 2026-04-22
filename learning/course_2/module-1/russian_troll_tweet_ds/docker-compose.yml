@@ -2,17 +2,17 @@
 
 services:
   neo4j:
-    image: neo4j:5.18
+    image: neo4j:${NEO4J_VERSION:-5.15.0}
     container_name: graphdb
 
-    restart: unless-stopped
+    restart: always
 
     ports:
       - "7474:7474"
       - "7687:7687"
     
     environment:
-      - NEO4J_AUTH=neo4j/${PASWWORD}
+      - NEO4J_AUTH=neo4j/${NEO4J_PASWWORD}
       - NEO4J_dbms_memory_heap_initial__size=${HEAP_INITIAL_SIZE}
       - NEO4J_dbms_memory_heap_max__size=${HEAP_MAX_SIZE}
       - NEO4J_dbms_memory_pagecache_size=${PAGE_CACHE_SIZE}
@@ -22,3 +22,11 @@ services:
       - ./logs:/logs
       - ./import:/var/lib/neo4j/import
       - ./plugins:/plugins
+      - ./conf:/config
+      - ./backups:/backups
+volumes:
+  data:
+  logs:
+  plugins:
+  conf:
+  backups:

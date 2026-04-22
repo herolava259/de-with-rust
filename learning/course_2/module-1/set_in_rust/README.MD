@@ -12,10 +12,18 @@
 
 ### 1. Implement a program that reads text from a file into a HashMap to count word frequencies in Rust.
 
+`Done`
+
 ### 2. Benchmark insertion and lookup performance on Vec, LinkedList, HashMap, and BTreeMap with 10k elements.
+
+`Done`
 
 ### 3. Build a priority queue with BinaryHeap and implement heap sort on a vector of integers.
 
+`Done`
+
 ### 4. Create a Rust struct that implements traits like PartialEq and Hash to be used as keys in a HashMap.
+
+`Done`
 
 ### 5. Write tests for a custom Rust collection type that leverages iterators and implements IntoIterator.
