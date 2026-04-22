@@ -3,6 +3,10 @@ use core::time;
 use chrono::{DateTime, Utc};
 
 use std::hash::{Hash, Hasher};
+
+use  std::collections::{HashMap};
+
+#[derive(Debug)]
 pub struct TweetAggregateRoot
 {
     tweet_id: String,
@@ -17,14 +21,14 @@ pub struct TweetAggregateRoot
 
 pub struct TweetBuilder
 {
+    hashtags_table: HashMap<String, String>,
+    links_table: HashMap<String, String>,
     tweet_id: Option<String>,
     screen_name: Option<String>,
     tweet_text: Option<String>,
     user_id: Option<String>,
-    time_stamp: Option<String>,
-    permalink: Option<String>,
-    hashtags_table: HashMap<String, String>,
-    links_table: HashMap<String, String>
+    timestamp: Option<String>,
+    permalink: Option<String>
 }
 
 
@@ -136,19 +140,81 @@ impl TweetAggregateRoot
     }
 }
 
-impl TweetBuilder {
+pub impl TweetBuilder {
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tweet_id: None,
             screen_name: None,
             tweet_text: None,
             user_id: None,
-            time_stamp: None,
+            timestamp: None,
             permalink: None,
-            hashtags_table: HashMap<String, String>,
-            links_table: HashMap<String, String>
+            hashtags_table: HashMap::new(),
+            links_table: HashMap::new()
         }
+    }
+
+    pub fn with_tweet_id(mut self, id: String) -> Self
+    {
+        self.tweet_id = Some(id);
+        self
+
+    }
+
+    pub fn with_screen_name(mut self, name: String) -> Self
+    {
+        self.screen_name = Some(name);
+        self
+    }
+
+    pub fn with_tweet_content(mut self, content: String) -> Self 
+    {
+        self.tweet_text = Some(content);
+        self
+    }
+
+    pub fn with_user_id(mut self, id: String) -> Self
+    {
+        self.user_id = Some(id);
+        self
+
+    }
+
+    pub fn with_timestamp(mut self, ts: String) -> Self
+    {
+        self.timestamp = Some(ts);
+        self
+    }
+
+    pub fn with_permalink(mut self, permalink: String) -> Self
+    {
+        self.permalink = Some(permalink);
+        self
+    }
+
+    pub fn has_hashtag(mut self, tag: String, archieved_url: String) -> Self
+    {
+        self.hashtags_table[tag] = archieved_url;
+        self
+    }
+
+    pub fn has_link(mut self, link: String, archieved_url: String) -> Self
+    {
+        self.hashtags_table[link] = archieved_url;
+        self
+    }
+
+    pub fn build(self) -> TweetAggregateRoot
+    {
+        TweetAggregateRoot::new(self.tweet_id.unwrap_or(String::new()), 
+                             self.screen_name.unwrap_or(String::new()), 
+                             self.tweet_text.unwrap_or(String::new()), 
+                              self.user_id.unwrap_or(String::new()), 
+                              self.timestamp.unwrap_or(String::new()), 
+                             self.hashtags_table.into_iter().map(|(k, v)| (k, v)).collect(),  
+                             self.links_table.into_iter().map(|(k, v)| (k, v)).collect(), 
+                             self.permalink.unwrap_or(String::new()) )
     }
 }
 

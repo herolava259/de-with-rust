@@ -10,8 +10,10 @@ use serde_json::Result;
 const LINKS_SOURCE: &str = "https://github.com/johnymontana/russian-twitter-trolls/blob/master/import/data/twitter_handle_urls.csv";
 const VERIFY_LINKS_URL: &str = "http://archive.org/wayback/available";
 const CONCURRENT_SIZE: usize = 5;
+const SCRAPE_DOMAIN_URL: &str = "http://web.archive.org/web/20150603004258/";
+const HTML_QUEUE_SIZE: usize = 100;
 
-pub async fn load_archived_links() -> impl Iteratos<Item = String>
+pub async fn load_archived_links() -> impl IntoIterator<Item = String>
 {
     
 
@@ -45,52 +47,75 @@ pub async fn verify_link_available(client: &Client, link: &String) -> bool
 }
 
 
-use async_trait::async_trait;
-use futures::stream::{self, StreamExt, join_all};
+
+use futures::{Stream, stream::{self, StreamExt, join_all}};
+use std::pin::Pin;
+
+//type BoxStream<T> = Piusingn<Box<dyn Stream<Item = T> + Send>>;
 
 
-#[async_trait]
 pub trait FilterOutUnavailableLink: Sized {
-    pub async fn filter_unavailable_links(self) -> Vec<String>;
+    async fn filter_unavailable_links(self) -> impl Stream<Item = String>;
 }
 
-#[async_trait]
 impl<I> FilterOutUnavailableLink for I 
-where I: IntoIterator<Item = String> + Send
+where I: IntoIterator<Item = String> + Send + 'static
 {
-    pub async fn filter_unavailable_links(self) -> Vec<String> {
+    async fn filter_unavailable_links(self) -> impl Stream<Item = String> {
 
         let client = Client::builder()
                                 .connect_timeout(Duration::from_millis(100))
-                                .build()?;
+                                .build()
+                                .unwrap();
         
 
-        stream::iter(self)
-                // .chunks(CONCURRENT_SIZE)
-                // .map(|chunk|{
-
-                //     let client = & client;
-                //     async move {
-                //         let futures = chunk.iter()
-                //                            .map(|link| verify_link_available(client, link));
-                //         let availability = join_all(futures).await;
-                        
-                //         chunk.into_iter()
-                //              .zip(availability.into_iter())
-                //              .filter_map(|(link, avail)| if avail { Some(link) } else { None })
-                //     }
-                // })
-                // .flatten()
-                .map(|link| async {
-                    if verify_link_available(&client, &link).await {
-                        Some(link)
-                    } else {
-                        None
+        let stream = stream::iter(self.into_iter())
+                .map(move |link| {
+                    let client = client.clone();
+                    async move {
+                        if verify_link_available(&client, &link).await {
+                            Some(link)
+                        } else {
+                            None
+                        }
                     }
                 })
                 .buffer_unordered(CONCURRENT_SIZE)
-                .filter_map(async move |x| x)
-                .collect::<Vec<_>>()
-                .await
+                .filter_map(|x| async move {x})
+                ;
+        
+        stream
+                
     }
 }
+
+pub async fn load_html(client: &Client, url: String) -> String
+{
+    client.get(SCRAPE_DOMAIN_URL + url)
+          .send()
+          .await?
+          .text()
+          .await?
+}
+
+
+use tokio::sync::mpsc;
+
+
+pub async fn extract_html(tx: mpsc::Sender<String>)
+{
+    let urls = load_archived_links().await;
+    let mut stream = urls.filter_unavailable_links().await;
+
+    let client = Client::builder()
+                                .connect_timeout(Duration::from_millis(100))
+                                .build()
+                                .unwrap();
+
+    while let Some(url) = stream.next().await{
+
+        tx.send(load_html(&client, url).await).await.unwrap();
+    }
+                                     
+}
+
