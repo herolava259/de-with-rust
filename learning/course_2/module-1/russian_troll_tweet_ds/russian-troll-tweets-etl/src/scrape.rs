@@ -5,7 +5,6 @@ use scraper::{Selector, Html};
 use std::collections::{HashMap};
 use crate::schema::TweetBuilder;
 
-const SCRAPE_URL: &str = "http://web.archive.org/web/20150603004258/";
 
 pub fn scrape_tweet_data_each_link(response: String) -> Vec<TweetAggregateRoot>
 {
