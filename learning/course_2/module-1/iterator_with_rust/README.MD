@@ -78,7 +78,7 @@
 ## 4. If you needed to process items in a collection in parallel, how could iterators help with that?
 
 > In Rust, iterator facilliate processing primarily through **Data Parallelism**. 
->> `Rayon* lib extend this pattern to automatically distribute work across multiple CPU cores
+>> `Rayon` lib extend this pattern to automatically distribute work across multiple CPU cores
 
 - Follow by parrallel way: 
     > `collection.par_iter().map(expensive_task).collect()`

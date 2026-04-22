@@ -1,10 +1,10 @@
 
 # Documentation for Devops
 
-- [plugin](https://neo4j.com/docs/operations-manual/current/configuration/plugins/)
-- [config-file](https://neo4j.com/docs/operations-manual/current/configuration/neo4j-conf/)
-- [docker>plugin](https://neo4j.com/docs/operations-manual/current/docker/plugins/)
-- [docker>standalone](https://neo4j.com/docs/operations-manual/current/docker/docker-compose-standalone/)
+- [neo4j>plugin](https://neo4j.com/docs/operations-manual/current/configuration/plugins/)
+- [neo4j>config-file](https://neo4j.com/docs/operations-manual/current/configuration/neo4j-conf/)
+- [neo4j>docker>plugin](https://neo4j.com/docs/operations-manual/current/docker/plugins/)
+- [neo4j>docker>standalone](https://neo4j.com/docs/operations-manual/current/docker/docker-compose-standalone/)
 - [docker>spec-ops](https://neo4j.com/docs/operations-manual/current/docker/operations/)
 - [docker>spec-settings](https://neo4j.com/docs/operations-manual/current/docker/ref-settings/)
 
