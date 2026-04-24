@@ -1,0 +1,1 @@
+tweetId:ID(Tweet-ID){id-type:long},text:string,permalink:string,authorId:long,timestamp:long

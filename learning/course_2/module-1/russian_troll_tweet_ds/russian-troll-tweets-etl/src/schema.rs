@@ -9,14 +9,14 @@ use  std::collections::{HashMap};
 #[derive(Debug)]
 pub struct TweetAggregateRoot
 {
-    tweet_id: String,
-    screen_name: String,
-    tweet_text: String,
-    user_id: String,
-    timestamp: DateTime<Utc>,
-    hashtags: Vec<(String, String)>,
-    links: Vec<(String, String)>,
-    permalink: String
+    pub tweet_id: String,
+    pub screen_name: String,
+    pub tweet_text: String,
+    pub user_id: String,
+    pub permalink: String,
+    pub timestamp: DateTime<Utc>,
+    pub hashtags: Vec<(String, String)>,
+    pub links: Vec<(String, String)>
 }
 
 pub struct TweetBuilder
@@ -33,7 +33,7 @@ pub struct TweetBuilder
 
 
 
-pub struct TweetRecord
+pub struct TweetEntity
 {
     tweet_id: String,
     text: String,
@@ -48,33 +48,33 @@ pub struct TweetHashTagRelationship
     hashtag: String
 }
 
-pub struct HashtagRecord
+pub struct HashtagEntity
 {
     tag: String,
     archieved_url: String
 }
 
-pub struct LinkRecord
+pub struct LinkEntity
 {
     url: String,
     archived_url: String,
     tweet_id: String
 }
 
-pub struct UserRecord
+pub struct UserEntity
 {
     user_id: String,
     screen_name: String
 }
 
-impl Hash for HashtagRecord{
+impl Hash for HashtagEntity{
 
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.tag.hash(state);
     }
 }
 
-impl Hash for UserRecord {
+impl Hash for UserEntity {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.user_id.hash(state);
     }
@@ -99,9 +99,9 @@ impl TweetAggregateRoot
         }
     }
 
-    pub fn normalize_schema(self) -> (TweetRecord, Vec<TweetHashTagRelationship>, Vec<LinkRecord>, Vec<>, UserRecord )
+    pub fn normalize_schema(self) -> (TweetEntity, Vec<TweetHashTagRelationship>,Vec<HashtagEntity>, Vec<LinkEntity>, UserEntity )
     {
-        let tweet = TweetRecord {
+        let tweet = TweetEntity {
             tweet_id: self.tweet_id,
             text: self.tweet_text,
             permalink: self.permalink,
@@ -117,21 +117,21 @@ impl TweetAggregateRoot
         }).collect();
 
         let hashtags = self.hashtags.into_iter().map(|tag, url| {
-            HashtagRecord{
+            HashtagEntity{
                 tag: tag,
                 archieved_url: url
             }
-        });
+        }).collect();
 
         let links = self.links.into_iter().map(|url, archived_url| {
-            LinkRecord {
+            LinkEntity {
                 url: url,
                 archived_url: archived_url,
                 tweet_id: self.tweet_id
             }
         }).collect();
 
-        let user = UserRecord{
+        let user = UserEntity{
             user_id: self.user_id,
             screen_name: self.screen_name
         };

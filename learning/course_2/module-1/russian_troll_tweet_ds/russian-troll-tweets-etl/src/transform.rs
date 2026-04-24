@@ -1,27 +1,24 @@
-use crate::scrape::scrape_tweet_data_each_link;
+use crate::scrape::scrape_tweet_data;
 use crate::schema::TweetAggregateRoot;
-use tokio::sync::{Semaphore, Semaphore};
-use std::sync::Arc;
+use std::sync::{Arc};
+use tokio::sync::{Semaphore, mpsc};
 
 
-const CONCCURENCY_CPU_BOUND_SIZE: usize = 5;
+const CONCURENCY_CPU_BOUND_SIZE: usize = 5;
 
-pub async fn transform_to_tweet_aggrgate(from_html_buffer: mpsc::Receiver<String>, to_storage_buffer: mpsc::Sender<Vec<TweetAggregateRoot>>)
+pub async fn transform_to_tweet_aggregate(from_html_buffer: mpsc::Receiver<String>, to_storage_buffer: mpsc::Sender<Vec<TweetAggregateRoot>>)
 {
-    let semaphore = Arc::new(Semaphore::new(CONCCURENCY_CPU_BOUND_SIZE));
+    let semaphore = Arc::new(Semaphore::new(CONCURENCY_CPU_BOUND_SIZE));
 
     while let Some(html) = from_html_buffer.recv().await {
 
         let permit = semaphore.clone().acquire_owned().await.unwrap();
 
-        let record;
+        let sender = to_storage_buffer.clone();
+
         tokio::task::spawn_blocking(move || {
-            record = scrape_tweet_data_each_link(response);
-        }).await;
-
-        drop(permit);
-        to_storage_buffer.send(record).await.unwrap();
-
-
+            let _ = sender.blocking_send(scrape_tweet_data(response));
+            drop(permit);
+        });
     }
 }

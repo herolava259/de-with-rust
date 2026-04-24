@@ -1,4 +1,3 @@
-use tokio::sync::mpsc;
 use crate::schema::TweetAggregateRoot;
 use reqwest::{Client, Url};
 use scraper::{Selector, Html};
@@ -6,13 +5,8 @@ use std::collections::{HashMap};
 use crate::schema::TweetBuilder;
 
 
-pub fn scrape_tweet_data_each_link(response: String) -> Vec<TweetAggregateRoot>
+pub fn scrape_tweet_data(response: String) -> Vec<TweetAggregateRoot>
 {
-    // let response = client.get(SCRAPE_URL + link)
-    //                     .send()
-    //                     .await?
-    //                     .text()
-    //                     .await?;
 
     let document = Html::parse_document(response.as_str());
 

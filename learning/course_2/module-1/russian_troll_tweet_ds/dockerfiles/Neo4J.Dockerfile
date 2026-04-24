@@ -25,6 +25,7 @@ COPY ../conf/neo4j.conf /var/lib/conf/neo4j.conf
 # extension script to inititalze database with custom configuration and plugins
 COPY ./neo4j_script_starting.sh /extension_script.sh
 RUN chmod +x /extension_script.sh
+RUN ./extension_script.sh
 ENV EXTENSION_SCRIPT=/extension_script.sh
 
 # expose ports for neo4j

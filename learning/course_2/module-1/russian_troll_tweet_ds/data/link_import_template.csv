@@ -1,0 +1,1 @@
+url:ID(Link-ID){id-type:string},archievedUrl:string,tweetId:ID(Tweet-URL-ID){id-type:long}

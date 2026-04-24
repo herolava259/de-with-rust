@@ -10,7 +10,7 @@ use serde_json::Result;
 const LINKS_SOURCE: &str = "https://github.com/johnymontana/russian-twitter-trolls/blob/master/import/data/twitter_handle_urls.csv";
 const VERIFY_LINKS_URL: &str = "http://archive.org/wayback/available";
 const CONCURRENT_SIZE: usize = 5;
-const SCRAPE_DOMAIN_URL: &str = "http://web.archive.org/";
+const ARCHIVED_DOMAIN_URL: &str = "http://web.archive.org/";
 const HTML_QUEUE_SIZE: usize = 100;
 
 pub async fn load_archived_links() -> impl IntoIterator<Item = String>
@@ -27,7 +27,7 @@ pub async fn load_archived_links() -> impl IntoIterator<Item = String>
 
 pub async fn get_link_available(client: &Client, link: &String) -> Option<String>
 {
-    let url = reqwest::Url::parse_with_params(Url, &[("url", link)])?;
+    let url = reqwest::Url::parse_with_params(VERIFY_LINKS_URL, &[("url", link)])?;
 
 
     let response = client
@@ -114,8 +114,19 @@ pub async fn extract_html(tx: mpsc::Sender<String>)
 
     while let Some(url) = stream.next().await{
 
-        tx.send(load_html(&client, url).await).await.unwrap();
+        match tx.reserve().await {
+            Ok(permit) => permit.send(load_html(&client, url).await),
+            Err(_) => break
+        }
     }
+
+    // stream.for_each(|url| {
+    //     let tx = tx.clone();
+
+    //     async move {
+    //         let _ = tx.send(item).await;
+    //     }
+    // }).await;
                                      
 }
 
