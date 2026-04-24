@@ -166,251 +166,109 @@ trait CsvRecord {
 fn spawn_csv_writer<T>(
     set_join: &mut JoinSet<Result<(), ()>>,
     path: PathBuf,
-    headers: &'static [&'static str]
+    headers: &'static [&'static str],
+    mut rtx: mpsc::Receiver<Vec<T>>,
 )
+where
+    T: CsvRecord + Send + 'static
 {
-    
+    set_join.spawn_blocking(move || {
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(b',')
+            .from_writer(BufWriter::new(File::create(path).map_err(|_| ())?));
+
+        writer.write_record(headers).map_err(|_| ())?;
+
+        let mut seen = HashSet::new();
+        while let Some(batch) = rx.blocking_recv() {
+            for row in batch {
+                if seen.insert(row.dedup_key()) {
+                    writer.write_record(row.to_record()).map_err(|_| ())?;
+                }
+            }
+        }
+
+        writer.flush().map_err(|_| ())
+    });
+}
+
+
+impl CsvRecord for TweetNode {
+    type Key = String;
+    fn dedup_key(&self) -> String { self.tweet_id }
+    fn to_record(&self) -> Vec<String> {
+        vec![self.tweet_id.to_string(), self.text.clone(),
+             self.permalink.clone(), self.author_id.to_string(),
+             self.timestamp.to_string()]
+    }
+}
+
+impl CsvRecord for HashtagNode {
+    type Key = String;
+    fn dedup_key(&self) -> String { self.tag.clone() }
+    fn to_record(&self) -> Vec<String> { vec![self.tag.clone(), self.archieved_url.clone()] }
+}
+
+impl CsvRecord for TweetHashTagRelationship {
+    type Key = String;
+    fn dedup_key(&self) -> String { format!("{}$-${}", self.tweet_id, self.hashtag) }
+    fn to_record(&self) -> Vec<String> {
+        vec![self.tweet_id.to_string(), self.hashtag.clone(), "ATTACHED_TO".into()]
+    }
+}
+
+impl CsvRecord for LinkNode {
+    type Key = String;
+    fn dedup_key(&self) -> String { self.url.clone() }
+    fn to_record(&self) -> Vec<String> {
+        vec![self.url.clone(), self.archived_url.clone(), self.tweet_id.to_string()]
+    }
+}
+
+impl CsvRecord for UserNode {
+    type Key = String;
+    fn dedup_key(&self) -> String { self.user_id }
+    fn to_record(&self) -> Vec<String> { vec![self.user_id.to_string(), self.screen_name.clone()] }
 }
 
 pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) 
-    -> Result<(&str, &str, &str, &str, &str), Box<dyn std::error::Error>>
+    -> Result<[String; 5], Box<dyn std::error::Error>>
 {
     let time_label = Utc::now().format("%Y%m%dT%H%M%S").to_string();
 
-    let dest_dir = Path::new(path_dir.as_str());
+    let dest = Path::new(&path_dir);
 
-    let tweet_export_path = dest_dir.join(format!("tweet_import_nodes_{}.csv", time_label));
-    let hashtag_export_path = dest_dir.join(format!("hashtag_import_nodes_{}.csv", time_label));
-    let hashtag_tweet_rels_path = dest_dir.join(format!("hashtag_tweet_import_relationships_{}.csv", time_label));
-    let link_export_path = dest_dir.join(format!("link_import_nodes_{}.csv", time_label));
-    let user_export_path = dest_dir.join(format!("user_import_nodes_{}.csv", time_label));
+    let paths = [
+        dest.join(format!("tweet_import_nodes_{}.csv", time_label)),
+        dest.join(format!("hashtag_import_nodes_{}.csv", time_label)),
+        dest.join(format!("hashtag_tweet_import_relationships_{}.csv", time_label)),
+        dest.join(format!("link_import_nodes_{}.csv", time_label)),
+        dest.join(format!("user_import_nodes_{}.csv", time_label)),
+    ];
 
 
-    let (tweet_proc, tweet_cons) = mpsc::channel::<Vec<TweetNode>>(100);
-    let (hashtag_proc, hashtag_cons) = mpsc::channel::<Vec<HashtagNode>>(100);
-    let (ht_rel_proc, ht_rel_cons) = mpsc::channel::<Vec<TweetHashTagRelationship>>(100);
-    let (link_proc, link_cons) = mpsc::channel::<Vec<LinkNode>>(100);
-    let (user_proc, user_cons) = mpsc::channel::<Vec<UserNode>>(100);
+    let (tweet_tx,   tweet_rx)   = mpsc::channel::<Vec<TweetNode>>(100);
+    let (hashtag_tx, hashtag_rx) = mpsc::channel::<Vec<HashtagNode>>(100);
+    let (rel_tx,     rel_rx)     = mpsc::channel::<Vec<TweetHashTagRelationship>>(100);
+    let (link_tx,    link_rx)    = mpsc::channel::<Vec<LinkNode>>(100);
+    let (user_tx,    user_rx)    = mpsc::channel::<Vec<UserNode>>(100);
 
     while let Some(batch) = source.recv().await{
-        let decomposition = batch.into_iter().map(|v| v.decompose());
+        let parts: Vec<_> = batch.into_iter().map(|v| v.decompose()).collect();
 
-        let tweets = decomposition.map(|t| t.0).collect();
-
-        tweet_proc.send(tweets).await.unwrap();
-
-        let hashtags = decomposition.flat_map(|t| t.1).collect();
-
-        hashtag_proc.send(hashtags).await.unwrap();
-
-        let rels = decomposition.flat_map(|t| t.2).collect();
-
-        ht_rel_proc.send(rels).await.unwrap();
-
-        let links = decomposition.flat_map(|t| t.3).collect();
-
-        link_proc.send(links).await.unwrap();
-
-        let users = decomposition.flat_map(|t| t.4).collect();
-
-        user_proc.send(users).await.unwrap();
+        tweet_tx  .send(parts.iter().map(|p| p.0.clone()).collect()).await?;
+        hashtag_tx.send(parts.iter().flat_map(|p| p.1.clone()).collect()).await?;
+        rel_tx    .send(parts.iter().flat_map(|p| p.2.clone()).collect()).await?;
+        link_tx   .send(parts.iter().flat_map(|p| p.3.clone()).collect()).await?;
+        user_tx   .send(parts.iter().flat_map(|p| p.4.clone()).collect()).await?;
 
     }
 
-    drop(tweet_proc); drop(hashtag_proc); drop(ht_rel_proc); drop(link_proc); drop(user_proc);
+    drop((tweet_tx, hashtag_tx, rel_tx, link_tx, user_tx));
 
     let mut set = JoinSet::new();
 
-    set.spawn_blocking(move || {
-        let file = File::create(tweet_export_path)?;
 
-        let csv_writer = csv::WriterBuilder::new()
-                                    .delimiter(b',')
-                                    .from_writer(BufWriter::new(file));
-
-        csv_writer.write_record(&["tweetId:ID(Tweet-ID){id-type:long}", "text:string", "permalink:string", "authoId:long", "timestamp:long"]);
-
-        let mut existed = HashSet::new();
-
-        while let Some(batch) = tweet_cons.blocking_recv()
-        {
-            for row in batch 
-            {
-
-                if ! existed.insert(row.tweet_id)
-                {
-                    continue;
-                }
-                
-                match csv_writer.write_record(&[row.tweet_id, 
-                                            row.text, 
-                                            row.permalink, 
-                                            row.author_id, 
-                                            row.timestamp.to_string()]){
-
-                    OK(_) => continue,
-                    Err(_) => return Err(())
-                };
-
-                
-            }
-        }
-
-        match csv_writer.flush()
-        {
-            Ok(_) => Ok(()),
-            Err(_) => Err(())
-        }
-
-
-    });
-
-
-    set.spawn_blocking(move || {
-        let file = File::create(hashtag_export_path)?;
-
-        let csv_writer = csv::WriterBuilder::new()
-                                    .delimiter(b',')
-                                    .from_writer(BufWriter::new(file));
-
-        csv_writer.write_record(&["tag:ID(Hashtag-ID){id-type:string}","archievedUrl:string"]);
-
-        let mut existed = HashSet::new();
-
-        while let Some(batch) = hashtag_cons.blocking_recv()
-        {
-            for row in batch 
-            {
-
-                if ! existed.insert(row.tag)
-                {
-                    continue;
-                }
-
-                match csv_writer.write_record(&[row.tag, row.archieved_url]){
-
-                    OK(_) => continue,
-                    Err(_) => return Err(())
-                };
-
-                //csv_writer.write_record(&[row.tag, row.archieved_url]);
-            }
-        }
-
-        match csv_writer.flush()
-        {
-            Ok(_) => Ok(()),
-            Err(_) => Err(())
-        }
-
-    });
-
-    set.spawn_blocking(move || {
-        let file = File::create(hashtag_tweet_rels_path)?;
-
-        let csv_writer = csv::WriterBuilder::new()
-                                    .delimiter(b',')
-                                    .from_writer(BufWriter::new(file));
-
-        csv_writer.write_record(&[":START_ID(Tweet-ID)",":END_ID(Hashtag-ID)", ":TYPE"]);
-
-        let mut existed = HashSet::new();
-
-        while let Some(batch) = ht_rel_cons.blocking_recv()
-        {
-            for row in batch 
-            {
-                if ! existed.insert(format!("{}$-${}", row.tweet_id, row.hashtag))
-                {
-                    continue
-                }
-                match csv_writer.write_record(&[row.tweet_id, row.hashtag, String::from("ATTACHED_TO")]){
-                    Ok(_) => continue,
-                    Err(_) => Err(())
-                };
-            }
-        }
-
-        match csv_writer.flush()
-        {
-            Ok(_) => Ok(()),
-            Err(_) => Err(())
-        }
-
-    });
-
-
-    set.spawn_blocking(move || {
-        let file = File::create(link_export_path)?;
-
-        let csv_writer = csv::WriterBuilder::new()
-                                    .delimiter(b',')
-                                    .from_writer(BufWriter::new(file));
-
-        csv_writer.write_record(&["url:ID(Link-ID){id-type:string}","archievedUrl:string", "tweetId:ID(Tweet-URL-ID){id-type:long}"]);
-
-        let mut existed = HashSet::new();
-
-        while let Some(batch) = link_cons.blocking_recv()
-        {
-            for row in batch 
-            {
-                if ! existed.insert(row.url)
-                {
-                    continue;
-                }
-                match csv_writer.write_record(&[row.url, row.archived_url, row.tweet_id]){
-                    Ok(_) => continue,
-                    Err(_) => return Err(())
-                };
-            }
-        }
-
-        match csv_writer.flush()
-        {
-            Ok(_) => Ok(()),
-            Err(_) => Err(())
-        }
-
-    });
-
-    set.spawn_blocking(move || {
-        let file = File::create(user_export_path)?;
-
-        let csv_writer = csv::WriterBuilder::new()
-                                    .delimiter(b',')
-                                    .from_writer(BufWriter::new(file));
-
-        csv_writer.write_record(&["userId:ID(User-ID){id-type:long}","screenName:string"]);
-
-        let mut existed = HashSet::new();
-
-        while let Some(batch) = user_cons.blocking_recv()
-        {
-            for row in batch 
-            {
-                if ! existed.insert(row.user_id)
-                {
-                    continue
-                }
-
-                match csv_writer.write_record(&[row.user_id, row.screen_name]) {
-
-                    OK(_) => continue,
-                    Err(_) => return Err(())
-                };
-
-                //csv_writer.write_record(&[row.user_id, row.screen_name]);
-            }
-        }
-
-        match csv_writer.flush()
-        {
-            Ok(_) => Ok(()),
-            Err(_) => Err(())
-        }
-
-    });
 
     while let Some(res) = set.join_next().await {
         
@@ -420,12 +278,32 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
         }
     }
 
+    spawn_csv_writer(&mut set, paths[0].clone(), 
+        &["tweetId:ID(Tweet-ID){id-type:long}", "text:string", "permalink:string", "authorId:long", "timestamp:long"],
+        tweet_rx);
 
-    Ok((tweet_export_path.to_str().unwrap(), 
-        hashtag_export_path.to_str().unwrap(), 
-        hashtag_tweet_rels_path.to_str().unwrap(),
-        link_export_path.to_str().unwrap(),
-        user_export_path.to_str().unwrap()))
+    spawn_csv_writer(&mut set, paths[1].clone(),
+        &["tag:ID(Hashtag-ID){id-type:string}", "archievedUrl:string"],
+        hashtag_rx);
+
+    spawn_csv_writer(&mut set, paths[2].clone(),
+        &[":START_ID(Tweet-ID)", ":END_ID(Hashtag-ID)", ":TYPE"],
+        rel_rx);
+
+    spawn_csv_writer(&mut set, paths[3].clone(),
+        &["url:ID(Link-ID){id-type:string}", "archievedUrl:string", "tweetId:ID(Tweet-URL-ID){id-type:long}"],
+        link_rx);
+
+    spawn_csv_writer(&mut set, paths[4].clone(),
+        &["userId:ID(User-ID){id-type:long}", "screenName:string"],
+        user_rx);
+
+    while let Some(res) = set.join_next().await {
+        res.unwrap().map_err(|_| "Error while exporting to CSV")?;
+    }
+
+
+    Ok(paths.map(|p| p.to_str().unwrap().to_string()))
 
 
 }
