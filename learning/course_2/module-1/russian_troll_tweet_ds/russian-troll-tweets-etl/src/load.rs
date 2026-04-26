@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use tokio::sync::mpsc;
 use csv::Writer;
 use serde::Serialize;
@@ -5,7 +6,7 @@ use crate::schema::TweetAggregateRoot;
 use std::{error::Error, fs::File, io::{BufReader, BufWriter}, iter::Rev, path::{Path, PathBuf}, time::Duration};
 use chrono::{Utc, Local};
 
-
+const CHUNK_SIZE: usize = 500;
 
 #[derive(Serialize)]
 struct TweetNode
@@ -13,12 +14,11 @@ struct TweetNode
     tweet_id: String,
     text: String,
     permalink: String,
-    author_id: String,
     timestamp: i64
 }
 
 #[derive(Serialize)]
-pub struct TweetHashTagRelationship
+pub struct TweetHashtagRelationship
 {
     tweet_id: String,
     hashtag: String
@@ -52,7 +52,6 @@ pub struct LinkNode
 {
     url: String,
     archived_url: String,
-    tweet_id: String
 }
 
 
@@ -73,18 +72,17 @@ pub struct LinkColumn
 
 impl TweetAggregateRoot
 {
-    fn decompose(self) -> (TweetNode, Vec<HashtagNode>, Vec<TweetHashTagRelationship>, UserTweetRelationship, Vec<TweetLinkRelationship>, Vec<LinkNode>, UserNode)
+    fn decompose(self) -> (TweetNode, Vec<HashtagNode>, Vec<TweetHashtagRelationship>, UserTweetRelationship, Vec<TweetLinkRelationship>, Vec<LinkNode>, UserNode)
     {
         let tweet = TweetNode {
             tweet_id: self.tweet_id,
             text: self.tweet_text,
             permalink: self.permalink,
-            author_id: self.user_id,
             timestamp: self.timestamp.timestamp()
         };
 
         let tweet_hashtag_rels = self.hashtags.into_iter().map(|(tag, l)| {
-            TweetHashTagRelationship{
+            TweetHashtagRelationship{
                 tweet_id: self.tweet_id,
                 hashtag: tag
             }
@@ -114,7 +112,6 @@ impl TweetAggregateRoot
             LinkNode {
                 url: url,
                 archived_url: archived_url,
-                tweet_id: self.tweet_id
             }
         }).collect();
 
@@ -227,7 +224,7 @@ impl CsvRecord for TweetNode {
     fn dedup_key(&self) -> String { self.tweet_id }
     fn to_record(&self) -> Vec<String> {
         vec![self.tweet_id.to_string(), self.text.clone(),
-             self.permalink.clone(), self.author_id.to_string(),
+             self.permalink.clone(),
              self.timestamp.to_string()]
     }
 }
@@ -238,7 +235,7 @@ impl CsvRecord for HashtagNode {
     fn to_record(&self) -> Vec<String> { vec![self.tag.clone(), self.archieved_url.clone()] }
 }
 
-impl CsvRecord for TweetHashTagRelationship {
+impl CsvRecord for TweetHashtagRelationship {
     type Key = String;
     fn dedup_key(&self) -> String { format!("{}$-${}", self.tweet_id, self.hashtag) }
     fn to_record(&self) -> Vec<String> {
@@ -267,7 +264,7 @@ impl CsvRecord for LinkNode {
     type Key = String;
     fn dedup_key(&self) -> String { self.url.clone() }
     fn to_record(&self) -> Vec<String> {
-        vec![self.url.clone(), self.archived_url.clone(), self.tweet_id.to_string()]
+        vec![self.url.clone(), self.archived_url.clone()]
     }
 }
 
@@ -297,7 +294,7 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
 
     let (tweet_tx,   tweet_rx)   = mpsc::channel::<Vec<TweetNode>>(100);
     let (hashtag_tx, hashtag_rx) = mpsc::channel::<Vec<HashtagNode>>(100);
-    let (tweet_hashtag_rel_tx,     tweet_hashtag_rel_rx)     = mpsc::channel::<Vec<TweetHashTagRelationship>>(100);
+    let (tweet_hashtag_rel_tx,     tweet_hashtag_rel_rx)     = mpsc::channel::<Vec<TweetHashtagRelationship>>(100);
     let (user_tweet_rel_tx,     user_tweet_rel_rx)     = mpsc::channel::<Vec<UserTweetRelationship>>(100);
     let (tweet_link_rel_tx,     tweet_link_rel_rx)     = mpsc::channel::<Vec<TweetLinkRelationship>>(100);
     let (link_tx,    link_rx)    = mpsc::channel::<Vec<LinkNode>>(100);
@@ -322,7 +319,7 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
 
 
     spawn_csv_writer(&mut set, paths[0].clone(), 
-        &["tweetId:ID(Tweet-ID){id-type:long}", "text:string", "permalink:string", "authorId:long", "timestamp:long"],
+        &["tweetId:ID(Tweet-ID){id-type:long}", "text:string", "permalink:string", "timestamp:long"],
         tweet_rx);
 
     spawn_csv_writer(&mut set, paths[1].clone(),
@@ -334,7 +331,7 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
         tweet_hashtag_rel_rx);
     
     spawn_csv_writer(&mut set, paths[3].clone(),
-        &[":START_ID(User-ID)", ":END_ID(TWEET-ID)", ":TYPE"],
+        &[":START_ID(User-ID)", ":END_ID(Tweet-ID)", ":TYPE"],
         user_tweet_rel_rx);
 
     spawn_csv_writer(&mut set, paths[4].clone(),
@@ -342,7 +339,7 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
         tweet_link_rel_rx);
 
     spawn_csv_writer(&mut set, paths[5].clone(),
-        &["url:ID(Link-ID){id-type:string}", "archievedUrl:string", "tweetId:ID(Tweet-URL-ID){id-type:long}"],
+        &["url:ID(Link-ID){id-type:string}", "archievedUrl:string"],
         link_rx);
 
     spawn_csv_writer(&mut set, paths[6].clone(),
@@ -382,7 +379,8 @@ pub struct Neo4jConfiguration
     pub password: &str,
     pub pool_size: usize,
     pub connection_timeout: Duration,
-    pub transaction_timeout: TransactionTimeout
+    pub transaction_timeout: TransactionTimeout,
+    //pub max_retry_time: Duration
 }
 
 impl Neo4jConfiguration
@@ -411,6 +409,19 @@ pub struct Neo4jConnector
     database: Arc<String>
 }
 
+#[derive(Debug, thisiserror::Error)]
+pub enum LoadToNeo4JError
+{
+    #[error("Query execution failed: {0}")]
+    QueryFailed(String),
+
+    #[error("Retry/timeout exhausted: {0}")]
+    RetryExhausted(String),
+ 
+    #[error("Scalar extraction failed")]
+    ScalarExtraction,
+}
+
 impl Neo4jConnector
 {
     pub fn new(config: Neo4jConfiguration, retry_policy: Option<ExponentialBackoff>) -> Self
@@ -425,40 +436,171 @@ impl Neo4jConnector
 
     
     pub fn execute_query(self, query: &str,
-                                parameters: HashMap<String, ValueSend>, 
+                                parameters: Option<HashMap<String, ValueSend>>, 
                                 routing_control: RoutingControl,
-                                            ) -> Result<ValueReceive, &str>
+                                            ) -> Result<ValueReceive, LoadToNeo4JError>
     {
 
         
         let mut session = self.driver.session(SessionConfig::new().with_database(Arc::clone(&self.database)));
 
-        let scalar = session.transaction()
+        let scalar = session
+               .transaction()
                .with_routing_control(routing_control)
                .with_transaction_timeout(self.configuration.transaction_timeout)
                .run_with_retry(self.retry_policy.clone(), |tx|
             {
-                Ok(tx.query(query)
-                     .with_parameters(parameters)
-                     .run()?
-                     .try_as_eager_result()?
-                     .expect("Some thing occur!")
-                     .into_scalar()
-                     .unwrap())
+                let mut q = tx.query(query);
+
+                if let Some(ref params) = parameters {
+                    q = q.with_parameters(params.clone());
+                }
+ 
+                let result = q
+                    .run()
+                    .map_err(|e| Neo4jError::QueryFailed(e.to_string()))?
+                    .try_as_eager_result()
+                    .map_err(|e| Neo4jError::QueryFailed(e.to_string()))?
+                    .ok_or(Neo4jError::ScalarExtraction)?
+                    .into_scalar()
+                    .map_err(|_| Neo4jError::ScalarExtraction)?;
+ 
+                Ok(result)
             });
 
-        match scalar {
+        scalar.map_err(|e| LoadToNeo4JError::RetryExhausted(e.to_string()))
 
-            Ok(rec) => Ok(rec),
-            Err(_) => Err("Timeout or retry error!!")
-            
-        }
+    }
 
+    
+}
+
+impl TweetAggregateRoot
+{
+    fn to_neo4j_parameters(&self) -> ValueSend {
+        ValueSend::Map([
+            ("userId".into(), ValueSend::String(self.user_id.clone())),
+            ("screenName".into(), ValueSend::String(self.screen_name.clone())),
+            ("tweetId".into(), ValueSend::String(self.tweet_id.clone())),
+            ("tweetText".into(), ValueSend::String(self.tweet_text.clone())),
+            ("permalink".into(), ValueSend::String(self.permalink.clone())),
+            ("hashtags".into(), ValueSend::List(
+                self.hashtags.iter().map(|h|{
+                    ValueSend::Map([
+                        ("tag".into(), ValueSend::String(h.0.clone())),
+                        ("archievedUrl".into(), ValueSend::String(h.1.clone()))
+                    ].into_iter().collect())
+                }).collect()
+            )),
+            ("links".into(), ValueSend::List(
+                self.links.iter().map(|l| {
+                    ValueSend::Map([
+                        ("url".into(), ValueSend::String(l.0.clone())),
+                        ("archievedUrl".into(), ValueSend::String(l.1.clone()))
+                    ].into_iter().collect())
+                }).collect()
+            ))
+        ].into_iter().collect())
     }
 }
 
+async fn setup_schema(connector: Neo4jConnector) -> Result<(), Box<dyn std::error::Error>> {
+    
 
-pub async fn load_to_neo4j(config: Neo4jConfiguration, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) -> Result<(), &str>
+    let constraints = vec![
+        "CREATE CONSTRAINT tweet_id_unique IF NOT EXISTS
+         FOR (t:Tweet) REQUIRE t.tweet_id IS UNIQUE",
+
+        "CREATE CONSTRAINT user_id_unique IF NOT EXISTS
+         FOR (u:User) REQUIRE u.user_id IS UNIQUE",
+
+        "CREATE CONSTRAINT hashtag_tag_unique IF NOT EXISTS
+         FOR (h:Hashtag) REQUIRE h.tag IS UNIQUE",
+
+        "CREATE CONSTRAINT link_url_unique IF NOT EXISTS
+         FOR (l:Link) REQUIRE l.url IS UNIQUE",
+    ];
+
+    for cypher in constraints {
+        connector.execute_query(cypher, None, RoutingControl::Write);
+    }
+
+    println!("Schema ready");
+    Ok(())
+}
+
+const LOAD_TWEETS_QUERY : &str = "
+        With $tweetArr AS tweets
+        UNWIND tweets AS tweet
+        MERGE (u:User {userId: tweet.userId})
+        ON CREATE SET u.screenName = tweet.screenName
+        MERGE (t: Tweet {tweetId: tweet.tweetId})
+        ON CREATE SET t.text = tweet.tweetText,
+                      t.permalink = tweet.permalink
+        MERGE (u)-[:POSTED]->(t)
+        FOREACH (ht IN tweet.hashtags | 
+                MERGE (h: Hashtag {tag: ht.tag})
+                ON CREATE SET h.archievedUrl = ht.archievedUrl
+                MERGE (t)-[:HAS_TAG]->(h)
+        )
+        FOREACH (link IN tweet.links | 
+            MERGE (l:Link {url: link.url})
+            ON CREATE SET h.archievedUrl = ht.archievedUrl
+            MERGE (t)-[:HAS_TAG]->(h)
+        )
+        FOREACH (link IN tweet.links |
+            MERGE (l:Link {url: link.url})
+            ON CREATE SET l.archievedUrl = link.archievedUrl
+            MERGE (t)-[:HAS_LINK]->(l)
+        )
+        ";
+
+pub async fn load_to_neo4j(config: Neo4jConfiguration, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) -> Result<(), LoadToNeo4JError>
 {
+    let mut connector = Arc::new(Neo4jConnector::new(config, Some(ExponentialBackoff::default())));
 
+
+    while let Some(batch) = source.recv().await
+    {
+        let handles: Vec<JoinHandle<Vec<Result<ValueReceive, LoadToNeo4JError>>>> = batch
+            .chunks(CHUNK_SIZE)
+            .map(|chunk| {
+                let connector = Arc::clone(&connector);
+                let chunk: Vec<TweetAggregateRoot> = chunk.to_vec();
+ 
+                tokio::task::spawn_blocking(move || {
+                    let results: Vec<Result<ValueReceive, LoadToNeo4JError>> = chunk
+                        .iter()
+                        .map(|tw| {
+                            let params = tw.to_neo4j_parameters();
+                            let mut map = HashMap::new();
+                            map.insert("tweetArr".to_string(), params);
+ 
+                            connector.execute_query(
+                                LOAD_TWEETS_QUERY,
+                                Some(map),
+                                RoutingControl::Write,
+                            )
+                        })
+                        .collect();
+                    return results
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            match handle.await {
+                Ok(results) => {
+                    for result in results {
+                        if let Err(e) = result {
+                            eprintln!("Query error: {}", e);
+                        }
+                    }
+                }
+                Err(e) => eprintln!("Task panicked: {:?}", e),
+            }
+        }
+    }
+
+    Ok(())
 }
