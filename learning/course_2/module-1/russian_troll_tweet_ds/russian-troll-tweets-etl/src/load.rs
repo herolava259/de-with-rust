@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::schema::TweetAggregateRoot;
 use std::{error::Error, fs::File, io::{BufReader, BufWriter}, iter::Rev, path::{Path, PathBuf}, time::Duration};
 use chrono::{Utc, Local};
+use crate::error::{LoadError, LoadToNeo4JError};
 
 const CHUNK_SIZE: usize = 500;
 
@@ -125,7 +126,8 @@ impl TweetAggregateRoot
     }
 }
 
-pub fn export_denormalized_data_to_csv(path_dir: String,delimiter: u8, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) -> Result<&str, Box<dyn std::error::Error>>
+pub fn export_denormalized_data_to_csv(path_dir: String,delimiter: u8, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) 
+-> Result<String, LoadError>
 {
     let dest_file_name = format!("tweet_denomalized_data_{}.csv", Utc::now().format("%Y%m%dT%H%M%S").to_string());
 
@@ -172,9 +174,9 @@ pub fn export_denormalized_data_to_csv(path_dir: String,delimiter: u8, source: m
     }
 
 
-    writer.flush()?;
+    csv_writer.flush().map_err(|err| LoadError::FileFlush { path: path_dir, source: error })?;
 
-    OK(file_path.to_str().unwrap().to_string())
+    OK(String::from(file_path.to_str()))
 
 }
 
@@ -190,32 +192,36 @@ trait CsvRecord {
 }
 
 fn spawn_csv_writer<T>(
-    set_join: &mut JoinSet<Result<(), ()>>,
+    set_join: &mut JoinSet<Result<(), LoadError>>,
     path: PathBuf,
     headers: &'static [&'static str],
     mut rtx: mpsc::Receiver<Vec<T>>,
-)
+)-> Result<(), LoadError>
 where
     T: CsvRecord + Send + 'static
 {
+    let path_string = String::from(path.as_str());
     set_join.spawn_blocking(move || {
         let mut writer = csv::WriterBuilder::new()
             .delimiter(b',')
-            .from_writer(BufWriter::new(File::create(path).map_err(|_| ())?));
+            .from_writer(BufWriter::new(File::create(path).map_err(|err| LoadError::FileCreate { path: path_string, source: err })?));
 
-        writer.write_record(headers).map_err(|_| ())?;
+        writer.write_record(headers).map_err(|err| LoadError::CsvWrite { source: err })?;
 
         let mut seen = HashSet::new();
         while let Some(batch) = rx.blocking_recv() {
             for row in batch {
                 if seen.insert(row.dedup_key()) {
-                    writer.write_record(row.to_record()).map_err(|_| ())?;
+                    writer.write_record(row.to_record()).map_err(|err| LoadError::CsvWrite { source: err })?;
                 }
             }
         }
 
-        writer.flush().map_err(|_| ())
+        writer.flush().map_err(|err| LoadError::FileFlush { path: String::from(path.to_str()), source: err })
+
     });
+
+    Ok(())
 }
 
 
@@ -275,7 +281,7 @@ impl CsvRecord for UserNode {
 }
 
 pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) 
-    -> Result<[String; 5], Box<dyn std::error::Error>>
+    -> Result<[String; 5], LoadError>
 {
     let time_label = Utc::now().format("%Y%m%dT%H%M%S").to_string();
 
@@ -320,34 +326,34 @@ pub async fn export_csv_to_import(path_dir: String, source: mpsc::Receiver<Vec<T
 
     spawn_csv_writer(&mut set, paths[0].clone(), 
         &["tweetId:ID(Tweet-ID){id-type:long}", "text:string", "permalink:string", "timestamp:long"],
-        tweet_rx);
+        tweet_rx)?;
 
     spawn_csv_writer(&mut set, paths[1].clone(),
         &["tag:ID(Hashtag-ID){id-type:string}", "archievedUrl:string"],
-        hashtag_rx);
+        hashtag_rx)?;
 
     spawn_csv_writer(&mut set, paths[2].clone(),
         &[":START_ID(Tweet-ID)", ":END_ID(Hashtag-ID)", ":TYPE"],
-        tweet_hashtag_rel_rx);
+        tweet_hashtag_rel_rx)?;
     
     spawn_csv_writer(&mut set, paths[3].clone(),
         &[":START_ID(User-ID)", ":END_ID(Tweet-ID)", ":TYPE"],
-        user_tweet_rel_rx);
+        user_tweet_rel_rx)?;
 
     spawn_csv_writer(&mut set, paths[4].clone(),
         &[":START_ID(Tweet-ID)", ":END_ID(Link-ID)", ":TYPE"],
-        tweet_link_rel_rx);
+        tweet_link_rel_rx)?;
 
     spawn_csv_writer(&mut set, paths[5].clone(),
         &["url:ID(Link-ID){id-type:string}", "archievedUrl:string"],
-        link_rx);
+        link_rx)?;
 
     spawn_csv_writer(&mut set, paths[6].clone(),
         &["userId:ID(User-ID){id-type:long}", "screenName:string"],
-        user_rx);
+        user_rx)?;
 
     while let Some(res) = set.join_next().await {
-        res.unwrap().map_err(|_| "Error while exporting to CSV")?;
+        res.map_err(|err| LoadError::WaitingWriteFileTask  { source: err.into() })??;
     }
 
 
@@ -365,7 +371,7 @@ use neo4j::{value_map, ValueReceive};
 use neo4j::session::{Session, SessionConfig};
 use std::sync::Arc;
 use std::collections::HashMap;
-
+use thiserror;
 
 
 
@@ -409,19 +415,6 @@ pub struct Neo4jConnector
     database: Arc<String>
 }
 
-#[derive(Debug, thisiserror::Error)]
-pub enum LoadToNeo4JError
-{
-    #[error("Query execution failed: {0}")]
-    QueryFailed(String),
-
-    #[error("Retry/timeout exhausted: {0}")]
-    RetryExhausted(String),
- 
-    #[error("Scalar extraction failed")]
-    ScalarExtraction,
-}
-
 impl Neo4jConnector
 {
     pub fn new(config: Neo4jConfiguration, retry_policy: Option<ExponentialBackoff>) -> Self
@@ -458,12 +451,12 @@ impl Neo4jConnector
  
                 let result = q
                     .run()
-                    .map_err(|e| Neo4jError::QueryFailed(e.to_string()))?
+                    .map_err(|e| LoadToNeo4jError::QueryFailed(e.to_string()))?
                     .try_as_eager_result()
-                    .map_err(|e| Neo4jError::QueryFailed(e.to_string()))?
-                    .ok_or(Neo4jError::ScalarExtraction)?
+                    .map_err(|e| LoadToNeo4JError::QueryFailed(e.to_string()))?
+                    .ok_or(LoadToNeo4jError::ScalarExtraction)?
                     .into_scalar()
-                    .map_err(|_| Neo4jError::ScalarExtraction)?;
+                    .map_err(|_| LoadToNeo4jError::ScalarExtraction)?;
  
                 Ok(result)
             });
@@ -555,50 +548,32 @@ const LOAD_TWEETS_QUERY : &str = "
         )
         ";
 
-pub async fn load_to_neo4j(config: Neo4jConfiguration, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) -> Result<(), LoadToNeo4JError>
+pub async fn load_to_neo4j(config: Neo4jConfiguration, source: mpsc::Receiver<Vec<TweetAggregateRoot>>) -> Result<(), LoadError>
 {
     let mut connector = Arc::new(Neo4jConnector::new(config, Some(ExponentialBackoff::default())));
 
 
     while let Some(batch) = source.recv().await
     {
-        let handles: Vec<JoinHandle<Vec<Result<ValueReceive, LoadToNeo4JError>>>> = batch
+        let handles: Vec<JoinHandle<Result<ValueReceive, LoadToNeo4JError>>> = batch
             .chunks(CHUNK_SIZE)
             .map(|chunk| {
                 let connector = Arc::clone(&connector);
                 let chunk: Vec<TweetAggregateRoot> = chunk.to_vec();
  
                 tokio::task::spawn_blocking(move || {
-                    let results: Vec<Result<ValueReceive, LoadToNeo4JError>> = chunk
+                    let params: Vec<ValueSend> = chunk
                         .iter()
-                        .map(|tw| {
-                            let params = tw.to_neo4j_parameters();
-                            let mut map = HashMap::new();
-                            map.insert("tweetArr".to_string(), params);
- 
-                            connector.execute_query(
-                                LOAD_TWEETS_QUERY,
-                                Some(map),
-                                RoutingControl::Write,
-                            )
-                        })
+                        .map(|tw| tw.to_neo4j_parameters())
                         .collect();
-                    return results
+                    return connector.execute_query(LOAD_TWEETS_QUERY, Some(value_map!({"tweetArr": ValueSend::List(params)})), routing_control)
+                    
                 })
             })
             .collect();
 
         for handle in handles {
-            match handle.await {
-                Ok(results) => {
-                    for result in results {
-                        if let Err(e) = result {
-                            eprintln!("Query error: {}", e);
-                        }
-                    }
-                }
-                Err(e) => eprintln!("Task panicked: {:?}", e),
-            }
+            handle.await.map_err(|err| LoadError::WaitingWriteFileTask { source: err })??;
         }
     }
 

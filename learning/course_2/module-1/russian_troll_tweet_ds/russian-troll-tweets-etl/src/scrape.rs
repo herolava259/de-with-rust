@@ -3,19 +3,20 @@ use reqwest::{Client, Url};
 use scraper::{Selector, Html};
 use std::collections::{HashMap};
 use crate::schema::TweetBuilder;
+use crate::error::TransformError;
 
 
-pub fn scrape_tweet_data(response: String) -> Vec<TweetAggregateRoot>
+pub fn scrape_tweet_data(response: String) -> Result<Vec<TweetAggregateRoot>, TransformError>
 {
 
     let document = Html::parse_document(response.as_str());
 
-    let tweet_selector = Selector::parse(r#"li[data-item-type="tweet"]"#).unwrap();
-    let tweet_ctn_selector = Selector::parse(r#"div.tweet"#).unwrap();
-    let tweet_content_selector = Selector::parse(r#"p.tweet-text"#).unwrap();
-    let link_selector = Selector::parse(r#"a.twitter-timeline-link"#).unwrap();
-    let hashtag_selector = Selector::parse(r#"a.twitter-hashtag"#).unwrap();
-    let bold_tag_selector = Selector::parse(r#"b"#).unwrap();
+    let tweet_selector = Selector::parse(r#"li[data-item-type="tweet"]"#).map_err(|_| TransformError::ScrapeParseSelector)?;
+    let tweet_ctn_selector = Selector::parse(r#"div.tweet"#).map_err(|_| TransformError::ScrapeParseSelector)?;
+    let tweet_content_selector = Selector::parse(r#"p.tweet-text"#).map_err(|_| TransformError::ScrapeParseSelector)?;
+    let link_selector = Selector::parse(r#"a.twitter-timeline-link"#).map_err(|_| TransformError::ScrapeParseSelector)?;
+    let hashtag_selector = Selector::parse(r#"a.twitter-hashtag"#).map_err(|_| TransformError::ScrapeParseSelector)?;
+    let bold_tag_selector = Selector::parse(r#"b"#).map_err(|_| TransformError::ScrapeParseSelector)?;
 
     let mut result: Vec<TweetAggregateRoot> = Vec::new();
 
@@ -60,6 +61,6 @@ pub fn scrape_tweet_data(response: String) -> Vec<TweetAggregateRoot>
 
     }
 
-    result
+    Ok(result)
 
 } 

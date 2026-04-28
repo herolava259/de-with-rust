@@ -6,12 +6,15 @@ use std::time::Duration;
 
 use serde_json::Result;
 
+use crate::error::ExtractError;
+
 
 const LINKS_SOURCE: &str = "https://github.com/johnymontana/russian-twitter-trolls/blob/master/import/data/twitter_handle_urls.csv";
 const VERIFY_LINKS_URL: &str = "http://archive.org/wayback/available";
 const CONCURRENT_SIZE: usize = 5;
 const ARCHIVED_DOMAIN_URL: &str = "http://web.archive.org/";
 const HTML_QUEUE_SIZE: usize = 100;
+const REQ_CONNECT_TIMEOUT_MILLI_SECOND: u64 = 300;
 
 pub async fn load_archived_links() -> impl IntoIterator<Item = String>
 {
@@ -45,7 +48,7 @@ pub async fn get_link_available(client: &Client, link: &String) -> Option<String
                                                                     );
     if let Some(v) = closest_obj
     {
-        return Some(v.to_string())
+        Some(v.to_string())
     }
     else {None } 
 }
@@ -68,7 +71,7 @@ where I: IntoIterator<Item = String> + Send + 'static
     async fn take_available_links(self) -> impl Stream<Item = String> {
 
         let client = Client::builder()
-                                .connect_timeout(Duration::from_millis(100))
+                                .connect_timeout(Duration::from_millis(REQ_CONNECT_TIMEOUT_MILLI_SECOND))
                                 .build()
                                 .unwrap();
         
@@ -89,35 +92,36 @@ where I: IntoIterator<Item = String> + Send + 'static
     }
 }
 
-pub async fn load_html(client: &Client, url: String) -> String
+pub async fn load_html(client: &Client, url: String) -> Result<String, ExtractError>
 {
     client.get(url)
           .send()
           .await?
           .text()
-          .await?
+          .await
+          .map_err(|err| ExtractError::HttpRequest { path: url, source: err })
 }
 
 
 use tokio::sync::mpsc;
 
 
-pub async fn extract_html(tx: mpsc::Sender<String>)
+pub async fn extract_html(tx: mpsc::Sender<String>) -> Result<(), ExtractError>
 {
     let urls = load_archived_links().await;
     let mut stream = urls.take_available_links().await;
 
     let client = Client::builder()
-                                .connect_timeout(Duration::from_millis(100))
+                                .connect_timeout(Duration::from_millis(REQ_CONNECT_TIMEOUT_MILLI_SECOND))
                                 .build()
                                 .unwrap();
 
     while let Some(url) = stream.next().await{
 
-        match tx.reserve().await {
-            Ok(permit) => permit.send(load_html(&client, url).await),
-            Err(_) => break
-        }
+        let html = load_html(&client, url).await.map_err(|e| ExtractError::HtmlParse { path: url, reason: e.to_string() })?;
+
+        tx.reserve().await.map_err(|_| ExtractError::ChannelClosed)?.send(html);
+
     }
 
     // stream.for_each(|url| {
@@ -127,6 +131,8 @@ pub async fn extract_html(tx: mpsc::Sender<String>)
     //         let _ = tx.send(item).await;
     //     }
     // }).await;
+
+    Ok(())
                                      
 }
 

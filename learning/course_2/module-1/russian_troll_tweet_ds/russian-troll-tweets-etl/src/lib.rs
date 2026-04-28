@@ -9,7 +9,8 @@ pub mod schema;
 pub mod scrape;
 
 pub mod load;
-
+pub mod pipeline;
+pub mod error;
 
 
 // pub mod tasks::direct_load_to_neo4j;
