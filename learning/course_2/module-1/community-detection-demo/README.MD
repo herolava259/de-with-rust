@@ -107,3 +107,39 @@
 - As label propagate, densely connected groups of nodes quickly reach a consensus on a unique label. At the end of the propagation only a few labels will remain-most will have disappeared. Nodes that have the same community label at convergence are said to belong to the same community.
 
 - One interesting feature of LPA is that nodes can be assigned preliminary labels to narrow down the range of solution genreated. This means that it can be used as semi-supervised way of finding communities where we hand-pick some initial communities.
+
+## **Leiden**
+
+- is an alg for detecting communities in large networks. The alg separaes nodes into disjoint communities so as to maximize a modularity score for each community. Modularity quantifies the quality of an assignment of nodes to communities, that is how densely connected nodes in a community are, compared to how connected they would be in a random network.
+
+- The Leiden alg is a hierarchical clustering algorithm, that  recursively merges communities into single nodes by greedily optimizing the modularity and the process repeats in the condensed graph. It modifies Louvain alg to address some of its shortcomings, namely the case where some of the communities found by Louvain alg are not well-connected. This is achieved by periodically randomly breaking down communities into smaller well-connected ones.
+
+## **Local Clustering Coefficient**
+
+- computes the local clustering coefficient for each node in the graph.
+- The local clustering coefficient $C_n$ of a node $n$ describes the likelihood that the neighbours of $n$ are also connected.
+- To compute $C_n$ we use the number of triangles as a node is a part of $T_n$ and the degree of the node $d_n$.   
+- To compute the local clustering coefficient is as follows:
+
+$$
+C_n = \frac{2T_n}{d_n(d_n-1)}
+$$
+
+- As we can see the triangle count is required to compute the local clustering coefficient. To do this the **Triangle Count** alg is utilised.
+
+## **Louvain**
+
+- The Louvain method is an algorithm to detect communities in large networks. It maximizes a modularity score for each community, where the modularity quantifies the quality of an assignment of nodes to communities. This mean evaluating how much more densely connected the nodes within a community are, compared to how connected they would be in a ramdom network. 
+
+- The Louvain alg is a hierarchical clustering algorithm, that recursively merges communities into a single node and executes the modularity clustering on the condensed graphs. 
+
+## **Modularity Metric**
+
+- Modularity is a metric that allows you to evaluate the quality of a community detection. Relationships of nodes in a community $C$ connect to nodes either within $C$ or outside $C$. Graphs with high modularity have dense connections between the nodes within communities but sparse connections between nodes in different communities.
+
+## **Modularity Optimization**
+
+- tries to detect communities in the graph based on their modularity. *Modularity* is a measure of the structure of a graph, measuring the density of connections within a module or community. Graphs with a high modularity score will have many connections within a community but only few pointing outwards to other communities. The alg will explore for every node if its modularity score might increase if changes its community to one of its neighboring nodes.
+
+## Strongly Connected Components
+

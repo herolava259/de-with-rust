@@ -20,7 +20,7 @@ enum Commands {
     
     RemoveTop{
         #[arg(short, long)]
-        remove: bool,
+        remove: bool,node
     },
 
     PrintOutUniqueList{

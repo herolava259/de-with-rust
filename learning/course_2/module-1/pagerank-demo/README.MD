@@ -11,4 +11,11 @@
 
 ## 1. Modify the program to accept an input graph from the user. The user should be able to specify the number of nodes and the connections between them.
 
-## 2. 
+`Done`
+
+## 2. Can you adapt the PageRank algorithm to work with other types of data, such as social networks or citation network?
+
+- Yeah! implement trait for PageRank with generic type
+
+## 3. How would you modify the program to `normalize` the PageRank values so that they sum to 1?
+

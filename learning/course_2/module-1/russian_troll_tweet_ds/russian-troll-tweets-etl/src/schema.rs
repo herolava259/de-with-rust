@@ -212,8 +212,8 @@ pub impl TweetBuilder {
                              self.tweet_text.unwrap_or(String::new()), 
                               self.user_id.unwrap_or(String::new()), 
                               self.timestamp.unwrap_or(String::new()), 
-                             self.hashtags_table.into_iter().map(|(k, v)| (k, v)).collect(),  
-                             self.links_table.into_iter().map(|(k, v)| (k, v)).collect(), 
+                             self.hashtags_table.into_iter().collect(),
+                             self.links_table.into_iter().collect(), 
                              self.permalink.unwrap_or(String::new()) )
     }
 }

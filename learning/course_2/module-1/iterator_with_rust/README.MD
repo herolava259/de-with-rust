@@ -96,3 +96,73 @@
 - efficient aggregation (reduce/fold)
 
 ## 5. What are some differences between iterators in Rust vs other languages like Python or Java? How does Rust's ownership model affect the iterator design?
+
+- Rust iterators look superfically similar to iterators in langauges like Python or Java, but Rust's ownership and borrowing rules fundementally shape how they work
+
+1. Rust's iterators are lazy
+
+2. Rust has multiple iterator modes based on ownership:
+- `.iter()` -> borrow immutably 
+- `.iter_mut()` -> borrow mutably 
+- `.into_iter()` -> take ownership
+
+3. Iterator item types encode ownership
+
+- Rust's iterator trait:
+
+```Rust
+trait Iterator {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>
+}
+```
+
+- The key is
+
+```Rust
+type Item;
+```
+
+Item may be : 
+    - T
+    - &T
+    - &mut T
+
+This means ownership behavior is part of the type system
+
+4. Rust iterators prevent invalid memory access at compile time
+
+5. Rust iterators are zero-cost abstractions
+
+6. Rust iterator invalidation is restricted by borrowing
+
+- In C++
+
+```cpp
+for(auto it = v.begin(); it != v.end(); ++it) {
+    v.push_back(4); // may invalidate iterators
+}
+```
+
+- Rust avoids this via borrowing:
+
+```rust
+for x in v.iter() {
+    v.push(4); // impossible
+}
+```
+
+7. Rust distinguishes `Iterator` vs `IntoIterator`
+
+8. Rust iterators compose with ownership transformations
+
+Methods likes:
+    - .cloned()
+    - .copied()
+    - .by_ref()
+exist to bridge ownership needs.
+
+9. Rust's iterator API is designed around borrowing lifetimes
+
+10. Mutation during iteration is explicit and safe
+
