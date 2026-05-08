@@ -21,3 +21,7 @@
 ## 2. Expand the graph to include more landmarks and connections.
 
 ## 3. Can you think of other real-life applications for Dijkstra's algorithm?
+
+- traffic application
+- network => routing shortest path between modem/router in the network?
+- genome

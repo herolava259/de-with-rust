@@ -28,3 +28,5 @@
 - Using hash map as counter (counting )
 
 ## 3. Can you adjust the program to print out the list of unique fruits at the end?
+
+`Done`

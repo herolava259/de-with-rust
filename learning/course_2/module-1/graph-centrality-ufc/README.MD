@@ -9,7 +9,7 @@
 - For each node u, the **Closeness Centrality** algorithm calculates the sum of its distances to all other nodes, based on calculating the shortest paths between all pairs of nodes. The resulting sum is then inverted to determine the closeness centrality score for that node. 
 
 > *raw closeness centrality* : 
-> `raw-closeness-centrality(u) = 1 / sum(distance-from-u-to-all-other-nodes)`
+> `raw-closeness-centrality(u) = 1 / sum(shortest-distance-from-u-to-all-other-nodes)`
 
 > *normalized closeness centrality*: 
 > `normalized-closeness-centrality(u) = (number-of-nodes -1) / sum(distance-from-u-to-all-other-nodes) `
@@ -19,7 +19,7 @@
 
 ### 2. How does the add_edge function work, and why do you need to pass in an array of NodeIndex?
 
-### 3. Why do we calculate the  fegree of a node by counting its outgoing edges?
+### 3. Why do we calculate the degree of a node by counting its outgoing edges?
 
 ## `Challenge Questions:`
 
@@ -48,7 +48,7 @@ $$
 - Step 2: Use the formula above to calculate betweeness centrality each node in the graph
 
 ### c. betweeness centrality in huge graph
-
+`mark as done`
 ### d. References
 
 - wiki: [from-network-x](https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.centrality.betweenness_centrality.html)
@@ -61,4 +61,8 @@ $$
 
 ### 2. How could you adapt this code to represent s different kind of network, such as a social network or transportation network?
 
+`mark as done`
+
 ### 3. Can you add functionality to add new fighters and fight to the network?
+
+`mark as done`
