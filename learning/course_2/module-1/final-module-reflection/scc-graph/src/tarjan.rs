@@ -89,16 +89,13 @@ impl<'a> TarjanAlgSolver<'a>
 
             let mut call_stack: VecDeque<(usize, usize)> = VecDeque::with_capacity(self.n_vertex);
 
-            let u_arg = r;
-            let local_counter: usize = 0;
-
             self.timer += 1;
-            self.time_in[u_arg] = self.timer;
-            self.time_lowest[u_arg] = self.timer;
+            self.time_in[r] = self.timer;
+            self.time_lowest[r] = self.timer;
 
-            self.stack.push_back(u_arg);
+            self.stack.push_back(r);
 
-            call_stack.push_back((u_arg, local_counter));
+            call_stack.push_back((r, 0));
 
 
             while let Some((u_arg, local_counter)) = call_stack.pop_back()
@@ -110,6 +107,7 @@ impl<'a> TarjanAlgSolver<'a>
                     self.timer += 1;
                     self.time_in[v] = self.timer;
                     self.time_lowest[v] = self.timer;
+                    self.stack.push_back(v);
 
                     call_stack.push_back((u_arg, local_counter));
                     call_stack.push_back((v, 0));

@@ -6,7 +6,7 @@
 
 ## 2. What does the pop method do, and what does it return?
 
-- take the last element of the sequence!
+- take the last element out of the sequence!
 
 ## 3. Why is it necessary to declare the Vector as mutable for these operations?
 
@@ -24,3 +24,5 @@
 - using sort-by method
 
 ## 3. Can you extend the program to count the occurrences of each fruit in the Vector?
+
+`tl-nd`

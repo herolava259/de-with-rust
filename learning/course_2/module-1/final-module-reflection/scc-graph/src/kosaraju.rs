@@ -142,6 +142,7 @@ impl<'a> KosarajuAlgSolver<'a>
             let mut p_arg: usize = self.n_vertex;
             let mut adj_idx: usize = 0;
             self.visited[u_arg] = true;
+            
             let mut component: HashSet<usize> = HashSet::new();
 
             component.insert(u_arg);

@@ -1,4 +1,4 @@
-use std::{cmp::min, os::raw};
+use std::{cmp::min};
 
 struct PriorityQueue<T>
 where T: Ord,
@@ -31,7 +31,23 @@ where T: Ord + Copy,
         self.data = new_data;
     }
 
+    #[inline]
+    fn left_down(i: usize) -> usize
+    {
+        i << 1
+    }
 
+    #[inline]
+    fn right_down(i: usize) -> usize 
+    {
+        (i << 1) + 1
+    }
+
+    #[inline]
+    fn climb_up(i: usize) -> usize 
+    {
+        i >> 1
+    }
     pub fn push(&mut self, item: T){
 
         if self.size == self.capacity {
@@ -45,7 +61,7 @@ where T: Ord + Copy,
 
         while cur_p > 1
         {
-            let par_p = cur_p >> 1;
+            let par_p = Self::climb_up(cur_p);
 
             if self.data[par_p] <= self.data[cur_p]{
                 break;
@@ -72,10 +88,10 @@ where T: Ord + Copy,
 
         let mut cur_p = 1;
 
-        while (cur_p << 1) + 1 <= self.size 
+        while Self::right_down(cur_p) <= self.size 
         {
-            let left_p = cur_p << 1;
-            let right_p = (cur_p << 1) + 1;
+            let left_p = Self::left_down(cur_p);
+            let right_p = Self::right_down(cur_p);
 
             let cur_min = min(self.data[cur_p], min(self.data[left_p], self.data[right_p]));
 
@@ -94,8 +110,8 @@ where T: Ord + Copy,
             }
         }
 
-        if (cur_p << 1) <= self.size && self.data[cur_p << 1] < self.data[cur_p] {
-            self.data.swap(cur_p, cur_p << 1);
+        if Self::left_down(cur_p) <= self.size && self.data[Self::left_down(cur_p)] < self.data[cur_p] {
+            self.data.swap(cur_p, Self::left_down(cur_p));
         }
 
         Some(res)
@@ -169,9 +185,9 @@ where T: Ord + Copy,
         let mut replicate = self.clone();
 
 
-        for _ in 0..self.size {
-
-            res.push(replicate.pop().unwrap());
+        while let Some(item) = replicate.pop()
+        {
+            res.push(item);
         }
 
         res.into_iter()

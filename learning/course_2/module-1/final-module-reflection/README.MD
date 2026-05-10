@@ -9,3 +9,5 @@
 ## 4. Develop a function determining if a graph defined using Rust's graph data structures is fully connected.
 
 ## 5. Implement Kosaraju's algorithm for detecting strongly connected components in a directed graph. 
+
+`Done`

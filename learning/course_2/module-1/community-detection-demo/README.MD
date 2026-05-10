@@ -3,7 +3,6 @@
 ## 1. How does the Kosaraju's algorithm works to detect strongly connected components in a directed graph?
 
 
-
 ## 2. How are Twitter users and their interactions represented in the graph?
 
 ## 3. What is the significance of the strongly connected components in the context of social network analysis?
